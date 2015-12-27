@@ -51,6 +51,22 @@ def get_episodes_for_series(series_name, api_key):
         if series.xpath('//Status/text()') == 'Ended':
             res["ended"] = True
 
+    try:
+        res["imdb"]     = series.xpath('//IMDB_ID/text()')[0]
+    except:
+        res["imdb"]     = series.xpath('//IMDB_ID/text()')
+    try:
+        res["runtime"]  = series.xpath('//Runtime/text()')[0]
+    except:
+        res["runtime"]  = series.xpath('//Runtime/text()')
+    try:
+        res["aired"]    = series.xpath('//FirstAired/text()')[0]
+    except:
+        res["aired"]    = series.xpath('//FirstAired/text()')
+    try:
+        res["overview"] = series.xpath('//Overview/text()')[0]
+    except:
+        res["overview"] = series.xpath('//Overview/text()')
     res["episodes"] = series.xpath('//Episode')
     res["name"] = series_name
     return res
@@ -87,13 +103,48 @@ def tv_next(text, bot=None):
     api_key = bot.config.get("api_keys", {}).get("tvdb", None)
     if api_key is None:
         return "error: no api key set"
-    episodes = get_episodes_for_series(text, api_key)
+
+    cmds = text.split(" ")
+    if cmds[0] == "overview":
+        text = ' '.join(cmds[1:])
+        episodes = get_episodes_for_series(text, api_key)
+    else:
+        episodes = get_episodes_for_series(text, api_key)
 
     if episodes["error"]:
         return episodes["error"]
 
     series_name = episodes["name"]
     ended = episodes["ended"]
+
+    if cmds[0] == "overview":
+        strbuilder  = "\n"
+        if episodes["overview"]:
+            e = episodes["overview"].split(" ")
+            c = 0
+            strbuilder += "Overview : "
+            print (episodes["overview"])
+            for w in e:
+                strbuilder += (w + " ")
+                c += len(w)
+                if c > 300:
+                    strbuilder += "\n"
+                    c = 0
+            strbuilder += "\n"
+        else:
+            return "Unknown TV series. (using www.thetvdb.com)"
+        if episodes["runtime"]:
+            strbuilder += ( " Runtime : %s\n" % episodes["runtime"] )
+        if episodes["aired"]:
+            strbuilder += ( "   Aired : %s\n" % episodes["aired"][0:4])
+        if ended:
+            strbuilder += ( "  Status : Ended\n" )
+        else:
+            strbuilder += ( "  Status : Continuing\n" )
+        if episodes["imdb"]:
+            strbuilder += ( "    IMDB : http://www.imdb.com/title/%s\n" % episodes["imdb"])
+        return strbuilder
+
     episodes = episodes["episodes"]
 
     if ended:
