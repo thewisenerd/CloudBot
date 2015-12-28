@@ -21,7 +21,9 @@ def get_with_search(endpoint, term):
     :return:
     """
     try:
-        params = {'q': term, 'client_id': api_key}
+        params = {'client_id': api_key}
+        if term != None:
+          params['q'] = term
         request = requests.get(API_BASE.format(endpoint), params=params)
         request.raise_for_status()
     except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
@@ -32,7 +34,7 @@ def get_with_search(endpoint, term):
     if not json:
         return None
     else:
-        return json[0]
+        return json
 
 
 def get_with_url(url):
@@ -68,9 +70,11 @@ def format_track(track, show_url=True):
     if track['genre']:
         out += " - \x02{}\x02".format(track['genre'])
 
-    out += " - \x02{:,}\x02 plays, \x02{:,}\x02 favorites, \x02{:,}\x02 comments".format(track['playback_count'],
-                                                                                         track['favoritings_count'],
-                                                                                         track['comment_count'])
+    out += " - \x02{:,}\x02 plays, \x02{:,}\x02 favorites".format(track['playback_count'],
+                                                                    track['favoritings_count'])
+
+    if track['commentable']:
+        out += ", \x02{:,}\x02 comments".format(track['comment_count'])
 
     if show_url:
         out += " - {}".format(web.try_shorten(track['permalink_url']))
@@ -92,13 +96,61 @@ def format_user(user, show_url=True):
     if user['country']:
         out += ", {}".format(formatting.truncate(user['country']))
 
-    out += " - \x02{track_count:,}\x02 tracks, \x02{playlist_count:,}\x02 playlists, \x02{followers_count:,}\x02 " \
+    out += " - \x02{track_count:,}\x02 tracks, \x02{public_favorites_count:,}\x02 favourites, \x02{playlist_count:,}\x02 playlists, \x02{followers_count:,}\x02 " \
            "followers, \x02{followings_count:,}\x02 followed".format(**user)
 
     if show_url:
         out += " - {}".format(web.try_shorten(user['permalink_url']))
+
     return out
 
+def format_user_favourites(user, show_url=True):
+    """
+    Takes a SoundCloud user item and returns their last 5 favourites.
+    """
+    out = "\x02{}\x02's fav. tracks:\n".format(user['username'])
+
+    try:
+        favs = get_with_url("https://soundcloud.com/%s/likes" % user['username'])
+    except:
+        return "Something went wrong!"
+
+    if favs == None or len(favs) == 0:
+        out += "No results found."
+        return out
+
+    if len(favs) > 5:
+        favs = favs[0:5]
+
+    for fav in favs:
+        out += format_track(fav)
+        out += "\n"
+
+    return out
+
+def format_user_tracks(user, show_url=True):
+    """
+    Takes a SoundCloud user item and returns their last 5 tracks.
+    """
+    out = "\x02{}\x02's tracks:\n".format(user['username'])
+
+    try:
+        tracks = get_with_search(("/users/%s/tracks" % user['id']), None)
+    except:
+        return "Something went wrong!"
+
+    if tracks == None or len(tracks) == 0:
+        out += "No results found."
+        return out
+
+    if len(tracks) > 5:
+        tracks = tracks[0:5]
+
+    for track in tracks:
+        out += format_track(track)
+        out += "\n"
+
+    return out
 
 def format_playlist(playlist, show_url=True):
     """
@@ -155,7 +207,7 @@ def soundcloud(text):
     if not api_key:
         return "This command requires a SoundCloud API key."
     try:
-        track = get_with_search('tracks', text)
+        track = get_with_search('tracks', text)[0]
     except APIError as ae:
         return ae
 
@@ -174,7 +226,8 @@ def soundcloud_user(text):
     if not api_key:
         return "This command requires a SoundCloud API key."
     try:
-        user = get_with_search('users', text)
+        cmds = text.split(" ")
+        user = get_with_search('users', cmds[0])[0]
     except APIError as ae:
         return ae
 
@@ -182,6 +235,10 @@ def soundcloud_user(text):
         return "No results found."
 
     try:
+        if (len(cmds) > 1) and cmds[1] in ["favourites", "favs", "likes"]:
+            return format_user_favourites(user)
+        elif (len(cmds) > 1) and cmds[1] == "tracks":
+            return format_user_tracks(user)
         return format_user(user)
     except APIError as ae:
         return ae
